@@ -1,9 +1,11 @@
 mod buffers;
 mod context;
+mod font_atlas;
 mod pipeline;
 
 use crate::buffers::Texture;
-use crate::{buffers::StorageTexture, context::Context, pipeline::ComputePipeline};
+use crate::font_atlas::FontAtlas;
+use crate::{buffers::StorageTexture, context::Context, pipeline::Pipeline};
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wgpu::BindGroupEntry;
@@ -18,12 +20,13 @@ use winit::{
 struct App {
     proxy: EventLoopProxy<AppEvent>,
     context: Option<Context>,
-    pipeline: Option<ComputePipeline>,
+    pipeline: Option<Pipeline>,
     output: Option<StorageTexture>,
     input_texture: Option<Texture>,
     bind_group: Option<wgpu::BindGroup>,
     scratch_canvas: Option<web_sys::HtmlCanvasElement>,
     scratch_ctx: Option<web_sys::CanvasRenderingContext2d>,
+    font_atlas: Option<FontAtlas>,
 }
 
 impl App {
@@ -37,6 +40,7 @@ impl App {
             bind_group: None,
             scratch_canvas: None,
             scratch_ctx: None,
+            font_atlas: None,
         }
     }
 
@@ -65,19 +69,25 @@ impl App {
                         BindGroupEntry {
                             binding: 0,
                             resource: wgpu::BindingResource::TextureView(
-                                &self.output.as_ref().unwrap().view,
-                            ),
-                        },
-                        BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::TextureView(
                                 &self.input_texture.as_ref().unwrap().view,
                             ),
                         },
                         BindGroupEntry {
-                            binding: 2,
+                            binding: 1,
                             resource: wgpu::BindingResource::Sampler(
                                 &self.input_texture.as_ref().unwrap().sampler,
+                            ),
+                        },
+                        BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::TextureView(
+                                &self.font_atlas.as_ref().unwrap().texture.view,
+                            ),
+                        },
+                        BindGroupEntry {
+                            binding: 3,
+                            resource: wgpu::BindingResource::Sampler(
+                                &self.font_atlas.as_ref().unwrap().texture.sampler,
                             ),
                         },
                     ],
@@ -155,17 +165,26 @@ impl App {
             });
 
         {
-            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("Video to ascii compute Pass"),
-                ..Default::default()
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Video to ascii render pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.output.as_ref().unwrap().view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
             });
 
-            compute_pass.set_pipeline(&self.pipeline.as_ref().unwrap().pipeline);
-            compute_pass.set_bind_group(0, self.bind_group.as_ref().unwrap(), &[]);
-
-            let workgroup_count_x = self.context.as_ref().unwrap().size.width.div_ceil(16);
-            let workgroup_count_y = self.context.as_ref().unwrap().size.height.div_ceil(16);
-            compute_pass.dispatch_workgroups(workgroup_count_x, workgroup_count_y, 1);
+            render_pass.set_pipeline(&self.pipeline.as_ref().unwrap().pipeline);
+            render_pass.set_bind_group(0, Some(self.bind_group.as_ref().unwrap()), &[]);
+            render_pass.draw(0..3, 0..1);
         }
 
         encoder.copy_texture_to_texture(
@@ -217,7 +236,11 @@ impl App {
                     Some("Input video texture"),
                 ));
 
-                log::info!("Resized input texture to match video dimensions: {}x{}", vw, vh);
+                log::info!(
+                    "Resized input texture to match video dimensions: {}x{}",
+                    vw,
+                    vh
+                );
 
                 return true;
             }
@@ -255,18 +278,20 @@ impl ApplicationHandler<AppEvent> for App {
         if let Some(video_input) = document.get_element_by_id("video-input") {
             if let Some(video_player) = document.get_element_by_id("video-player") {
                 let video_player: web_sys::HtmlVideoElement = video_player.dyn_into().unwrap();
-                let closure = wasm_bindgen::closure::Closure::wrap(Box::new(move |event: web_sys::Event| {
-                    let target = event.target().unwrap();
-                    let input = target.dyn_into::<web_sys::HtmlInputElement>().unwrap();
-                    if let Some(files) = input.files() {
-                        if files.length() > 0 {
-                            let file = files.get(0).unwrap();
-                            let url = web_sys::Url::create_object_url_with_blob(&file).unwrap();
-                            video_player.set_src(&url);
-                            let _ = video_player.play();
+                let closure =
+                    wasm_bindgen::closure::Closure::wrap(Box::new(move |event: web_sys::Event| {
+                        let target = event.target().unwrap();
+                        let input = target.dyn_into::<web_sys::HtmlInputElement>().unwrap();
+                        if let Some(files) = input.files() {
+                            if files.length() > 0 {
+                                let file = files.get(0).unwrap();
+                                let url = web_sys::Url::create_object_url_with_blob(&file).unwrap();
+                                video_player.set_src(&url);
+                                let _ = video_player.play();
+                            }
                         }
-                    }
-                }) as Box<dyn FnMut(_)>);
+                    })
+                        as Box<dyn FnMut(_)>);
                 video_input
                     .add_event_listener_with_callback("change", closure.as_ref().unchecked_ref())
                     .unwrap();
@@ -304,7 +329,7 @@ impl ApplicationHandler<AppEvent> for App {
                 self.scratch_canvas = Some(canvas);
                 self.scratch_ctx = Some(ctx);
 
-                let pipeline = ComputePipeline::new(&context, Some("Video to ASCII pipeline"));
+                let pipeline = Pipeline::new(&context, Some("Video to ASCII pipeline"));
                 self.pipeline = Some(pipeline);
 
                 self.context = Some(context);
@@ -315,7 +340,9 @@ impl ApplicationHandler<AppEvent> for App {
                     self.context.as_ref().unwrap(),
                     wgpu::TextureUsages::TEXTURE_BINDING
                         | wgpu::TextureUsages::COPY_SRC
-                        | wgpu::TextureUsages::STORAGE_BINDING,
+                        | wgpu::TextureUsages::STORAGE_BINDING
+                        | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    self.context.as_ref().unwrap().surface_format,
                     Some("Output Texture"),
                 ));
 
@@ -329,6 +356,13 @@ impl ApplicationHandler<AppEvent> for App {
                     Some("Input video texture"),
                 );
 
+                self.font_atlas = Some(FontAtlas::new(
+                    self.context.as_mut().unwrap(),
+                    "`',;+c/sv7FCIt[o5j]Skh4OUXmDBMQ@",
+                    "../JetBrainsMono.ttf",
+                    12.0,
+                ));
+
                 let bind_group = self.context.as_ref().unwrap().device.create_bind_group(
                     &wgpu::BindGroupDescriptor {
                         label: Some("Video to ascii bind group"),
@@ -337,16 +371,26 @@ impl ApplicationHandler<AppEvent> for App {
                             BindGroupEntry {
                                 binding: 0,
                                 resource: wgpu::BindingResource::TextureView(
-                                    &self.output.as_ref().unwrap().view,
+                                    &input_texture.view,
                                 ),
                             },
                             BindGroupEntry {
                                 binding: 1,
-                                resource: wgpu::BindingResource::TextureView(&input_texture.view),
+                                resource: wgpu::BindingResource::Sampler(
+                                    &input_texture.sampler,
+                                ),
                             },
                             BindGroupEntry {
                                 binding: 2,
-                                resource: wgpu::BindingResource::Sampler(&input_texture.sampler),
+                                resource: wgpu::BindingResource::TextureView(
+                                    &self.font_atlas.as_ref().unwrap().texture.view,
+                                ),
+                            },
+                            BindGroupEntry {
+                                binding: 3,
+                                resource: wgpu::BindingResource::Sampler(
+                                    &self.font_atlas.as_ref().unwrap().texture.sampler,
+                                ),
                             },
                         ],
                     },

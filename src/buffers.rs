@@ -1,6 +1,6 @@
 use crate::context::Context;
 use bytemuck::Pod;
-use wgpu::{Label, util::DeviceExt};
+use wgpu::util::DeviceExt;
 
 pub struct UniformBuffer<T> {
     pub data: T,
@@ -95,6 +95,7 @@ impl StorageTexture {
         height: u32,
         context: &Context,
         usage: wgpu::TextureUsages,
+        format: wgpu::TextureFormat,
         label: Option<&str>,
     ) -> Self {
         let extent = wgpu::Extent3d {
@@ -109,7 +110,7 @@ impl StorageTexture {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: context.surface_format,
+            format,
             usage,
             view_formats: &[],
         });
