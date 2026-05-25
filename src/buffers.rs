@@ -84,7 +84,6 @@ impl Texture {
 }
 
 pub struct StorageTexture {
-    pub extent: wgpu::Extent3d,
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
 }
@@ -118,7 +117,6 @@ impl StorageTexture {
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         Self {
-            extent,
             texture,
             view,
         }

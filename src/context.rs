@@ -1,14 +1,12 @@
 use std::sync::Arc;
 
 pub struct Context {
-    pub instance: wgpu::Instance,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub window: Arc<winit::window::Window>,
     pub surface: wgpu::Surface<'static>,
     pub size: winit::dpi::PhysicalSize<u32>,
     pub surface_format: wgpu::TextureFormat,
-    surface_config: wgpu::SurfaceConfiguration,
 }
 
 impl Context {
@@ -75,14 +73,12 @@ impl Context {
         surface.configure(&device, &surface_config);
 
         Self {
-            instance,
             device,
             queue,
             window,
             surface,
             size,
             surface_format,
-            surface_config,
         }
     }
 }

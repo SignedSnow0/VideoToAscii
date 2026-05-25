@@ -1,7 +1,6 @@
 use crate::context::Context;
 
 pub struct Pipeline {
-    pub layout: wgpu::PipelineLayout,
     pub bind_groups_layouts: Vec<wgpu::BindGroupLayout>,
     pub pipeline: wgpu::RenderPipeline,
 }
@@ -107,7 +106,6 @@ impl Pipeline {
             });
 
         Self {
-            layout,
             bind_groups_layouts: vec![bind_group_layout],
             pipeline,
         }
