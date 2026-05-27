@@ -7,6 +7,7 @@ pub struct Context {
     pub surface: wgpu::Surface<'static>,
     pub size: winit::dpi::PhysicalSize<u32>,
     pub surface_format: wgpu::TextureFormat,
+    pub surface_config: wgpu::SurfaceConfiguration,
 }
 
 impl Context {
@@ -79,6 +80,17 @@ impl Context {
             surface,
             size,
             surface_format,
+            surface_config,
+        }
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) {
+        if width > 0 && height > 0 {
+            self.size.width = width;
+            self.size.height = height;
+            self.surface_config.width = width;
+            self.surface_config.height = height;
+            self.surface.configure(&self.device, &self.surface_config);
         }
     }
 }

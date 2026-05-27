@@ -1,18 +1,47 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-    <head>
-        <meta charset="utf-8" />
-        <title>Rust WebGPU Compute</title>
-        <link data-trunk rel="rust" href="Cargo.toml" />
-        <link data-trunk rel="css" href="style.css" />
-        <style>
-            body { background: #1a1a1a; color: white; font-family: sans-serif; }
-        </style>
-    </head>
-    <body>
-        <h1>WebGPU Image Processor</h1>
-        <input type="file" id="video-input" accept="video/*" />
-        <video id="video-player" style="display:none" playsinline muted autoplay loop></video>
-        <canvas id="viewport-canvas"></canvas>
-    </body>
+  <head>
+    <meta charset="utf-8" />
+    <title>Video to Ascii</title>
+    <link data-trunk rel="rust" href="Cargo.toml" />
+    <link data-trunk rel="css" href="style.css" />
+  </head>
+  <body>
+    <div class="header">
+      <h1>Video to ascii converter</h1>
+    </div>
+    <div class="body">
+      <canvas id="viewport-canvas" ></canvas>
+      <h2>Settings</h2>
+      <input
+        type="file"
+        id="video-input"
+        accept="video/*"
+        value="Choose a video file"
+      />
+
+      <h2>How it works</h2>
+      The website uses <a href="https://wgpu.rs/">wgpu</a> to convert video
+      frames to ascii art completely locally in the browser taking advantage of
+      the GPU.
+    </div>
+
+    <div class="footer">
+      <p>
+        Made by
+        <a href="https://github.com/SignedSnow0">SignedSnow0</a><br />
+        Source code available on
+        <a href="https://github.com/SignedSnow0/VideoToAscii">Github</a>
+      </p>
+    </div>
+    <!-- Hidden, used to get video buffer -->
+    <video
+      id="video-player"
+      style="display: none"
+      playsinline
+      muted
+      autoplay
+      loop
+    ></video>
+  </body>
 </html>

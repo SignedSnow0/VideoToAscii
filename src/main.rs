@@ -8,6 +8,7 @@ use crate::font_atlas::FontAtlas;
 use crate::{buffers::StorageTexture, context::Context, pipeline::Pipeline};
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
+use web_sys::HtmlCanvasElement;
 use wgpu::BindGroupEntry;
 use winit::platform::web::WindowAttributesExtWebSys;
 use winit::{
@@ -242,6 +243,20 @@ impl App {
                     vh
                 );
 
+                let canvas = document
+                    .get_element_by_id("viewport-canvas")
+                    .expect("Canvas element with ID 'viewport-canvas' not found")
+                    .dyn_into::<HtmlCanvasElement>()
+                    .unwrap();
+
+                canvas.style().set_property("width", "100%").unwrap();
+                canvas.style().set_property("height", "auto").unwrap();
+                
+                canvas
+                    .style()
+                    .set_property("aspect-ratio", &format!("{} / {}", vw, vh))
+                    .unwrap();
+
                 return true;
             }
         }
@@ -370,15 +385,11 @@ impl ApplicationHandler<AppEvent> for App {
                         entries: &[
                             BindGroupEntry {
                                 binding: 0,
-                                resource: wgpu::BindingResource::TextureView(
-                                    &input_texture.view,
-                                ),
+                                resource: wgpu::BindingResource::TextureView(&input_texture.view),
                             },
                             BindGroupEntry {
                                 binding: 1,
-                                resource: wgpu::BindingResource::Sampler(
-                                    &input_texture.sampler,
-                                ),
+                                resource: wgpu::BindingResource::Sampler(&input_texture.sampler),
                             },
                             BindGroupEntry {
                                 binding: 2,
@@ -414,6 +425,23 @@ impl ApplicationHandler<AppEvent> for App {
             WindowEvent::KeyboardInput { event, .. } => {
                 self.update(&event);
             }
+            WindowEvent::Resized(physical_size) => {
+                if let Some(context) = self.context.as_mut() {
+                    context.resize(physical_size.width, physical_size.height);
+                    self.output = Some(StorageTexture::new(
+                        physical_size.width,
+                        physical_size.height,
+                        context,
+                        wgpu::TextureUsages::TEXTURE_BINDING
+                            | wgpu::TextureUsages::COPY_SRC
+                            | wgpu::TextureUsages::STORAGE_BINDING
+                            | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                        context.surface_format,
+                        Some("Output Texture"),
+                    ));
+                    context.window.request_redraw();
+                }
+            }
             WindowEvent::RedrawRequested => {
                 self.render();
             }
@@ -439,7 +467,7 @@ pub async fn run() {
     let proxy = event_loop.create_proxy();
     let app = App::new(proxy);
 
-    event_loop.set_control_flow(ControlFlow::Poll);
+    event_loop.set_control_flow(ControlFlow::Wait);
 
     use winit::platform::web::EventLoopExtWebSys;
     event_loop.spawn_app(app);
